@@ -8,11 +8,12 @@ function total_files {
 	find $1 -type f | wc -l
 }
 
+#passes in element from FolderArray as $1
 function video_to_image {
 	dir=$(pwd)
 	local input_file=${dir}/${1}videos/${1}${2}.mov
-	cd ${1}images
-	ffmpeg -i $input_file  -r 0.5 -s 32x32 -qscale:v 2 ${1}${2}-%03d.jpg
+	cd ${1}images_128x128
+	ffmpeg -i $input_file  -r 0.5 -s 128x128 -qscale:v 2 ${1}${2}-%03d.jpg
 	cd ..
 }
 

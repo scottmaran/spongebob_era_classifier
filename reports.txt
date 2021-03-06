@@ -1,0 +1,2 @@
+Model type, image size, val accuracy, notes
+Simple nn, 32x32, .469, only predicted old
