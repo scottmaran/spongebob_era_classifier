@@ -8,8 +8,6 @@ from torch.utils.data import TensorDataset, DataLoader
 from models import get_current_model
 import helper_functions as help
 
-
-
 data, labels = help.read_paths(random_seed=2430)
 
 #SCALE raw pixel intensities & convert to numpy arrays
@@ -23,7 +21,7 @@ print('Using ',device, ' device')
 
 LEARNING_RATE = 0.0001
 BATCH_SIZE = 16
-EPOCHS = 1
+EPOCHS = 17
 
 tensor_trainX = torch.Tensor(trainX)
 print(tensor_trainX.size())
@@ -43,26 +41,26 @@ optimizer_name = "Adam"
 
 print("Beginning to train")
 #(train_dataloader, model, loss_fn, optimzer, epochs, device)
-loss_history = help.train_part34(train_dataloader, model, loss_fn, optimizer, EPOCHS, device)
+loss_history, accuracy_history = help.train(train_dataloader, model, loss_fn, optimizer, EPOCHS, device)
+model_filepath = 'saved_models/cnn_1.pt'
+torch.save(model.state_dict(), model_filepath)
 
 best_loss = round(min(loss_history), 3)
-#best_acc = round(max(accuracy_history), 3)
+best_acc = round(max(accuracy_history), 3)
 #print(f"Best training accuracy: {best_acc}")
 
-#acc_filename = f"viz/acc_model{curr_model_num}.png"
-#help.plot_history(accuracy_history, 'accuracy', acc_filename)
+acc_filename = f"plots/training_accuracy_cnn_1.png"
+help.plot_history(accuracy_history, 'accuracy', acc_filename)
 
-#loss_filename = f"viz/loss_model{curr_model_num}.png"
-#help.plot_history(loss_history, 'loss', loss_filename)
+loss_filename = f"plots/training_loss_cnn_1.png"
+help.plot_history(loss_history, 'loss', loss_filename)
 
 print('Beginning to test')
 tensor_testX = torch.Tensor(testX)
-print(tensor_trainX.size())
+print(tensor_testX.size())
 tensor_testX = tensor_testX.permute(0,3,1,2)
 tensor_testY = torch.Tensor(testY)
 test_dataset = TensorDataset(tensor_testX, tensor_testY)
 test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
-#test_loop(dataloader, model, loss_fn, device)
 test_loss, acc_percentage = help.test_loop(test_dataloader, model, loss_fn, device)
-print(f"Acc% = {acc_percentage}")
-#print('test accuracy: ', round(test_acc,3))
+print(f"Test Acc% = {acc_percentage}")

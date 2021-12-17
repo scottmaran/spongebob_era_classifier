@@ -12,22 +12,23 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Reads image file paths and returns x and y lists
 # old = 0, new = 1
-def read_paths(random_seed):
+# currently size needs to be either 32 or 128, as those are the only datasets stored in these repo
+def read_paths(random_seed, size=32):
     print("Loading images...")
     data = []
     labels = []
+    print(f"Size = {size}")
+
+    old_path = f'spongebob_old_images_{size}x{size}'
+    new_path = f'spongebob_new_images_{size}x{size}'
 
     #start with old images
-    for image_file_name in os.listdir('spongebob_old_images_32x32'):
+    for image_file_name in os.listdir(old_path):
         try:
-            path = os.path.join(os.getcwd(),'spongebob_old_images_32x32', image_file_name)
+            path = os.path.join(os.getcwd(),old_path, image_file_name)
             image = cv2.imread(path).flatten()
-            #print(type(image))
-
-            #image = cv2.imread(os.path.realpath(image_file_name)).flatten()
-            # NO resizing done here
+            # NO resizing or scaling done here
             data.append(image)
-            # append 
             #labels.append('old')
             labels.append(0)
         except:
@@ -35,12 +36,10 @@ def read_paths(random_seed):
             pass
 
     #do new images
-    for image_file_name in os.listdir('spongebob_new_images_32x32'):
+    for image_file_name in os.listdir(new_path):
         try: 
-            path = os.path.join(os.getcwd(),'spongebob_new_images_32x32', image_file_name)
-            # scale color sizes
-            image = cv2.imread(path).flatten() / 255.0
-            #image = cv2.imread(os.path.realpath(image_file_name)).flatten()
+            path = os.path.join(os.getcwd(),new_path, image_file_name)
+            image = cv2.imread(path).flatten()
             # NO resizing done here
             data.append(image)
             #labels.append('new')
@@ -50,7 +49,7 @@ def read_paths(random_seed):
             pass
 
     data = np.stack(data,axis=0)
-    data = data.reshape(-1, 32, 32, 3)
+    data = data.reshape(-1, size, size, 3)
 
     #shuffle two lists with same order
     #temp = list(zip(data, labels)) 
@@ -58,28 +57,6 @@ def read_paths(random_seed):
     #random.shuffle(temp) 
     #data, labels = zip(*temp) 
     return data, labels
-
-def train_loop(dataloader, model, loss_fn, optimizer, device):
-    size = len(dataloader.dataset)
-    for batch, (X,y) in enumerate(dataloader):
-
-        model.train()  # put model to training mode
-        X = X.to(device=device)  # move to device, e.g. GPU
-        y = y.to(device=device)
-        
-        #compute prediction and loss
-        pred = model(X)
-        loss = loss_fn(pred,y)
-
-        #Backpropagation
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if batch % 100 == 0:
-            loss, current = loss.item(), batch*len(X)
-            print(f"loss: {loss:>7f} [{current:>5d}/{size:>5d}]")
-
 
 def test_loop(dataloader, model, loss_fn, device):
     size = len(dataloader.dataset)
@@ -100,14 +77,18 @@ def test_loop(dataloader, model, loss_fn, device):
     
     return test_loss, correct
 
-def train_part34(train_dataloader, model, loss_fn, optimizer, epochs, device):
+def train(train_dataloader, model, loss_fn, optimizer, epochs, device, save_while_training=False, model_filepath='NA'):
 
     model = model.to(device=device)  # move the model parameters to CPU/GPU
+
+    num_batches = len(train_dataloader)
+    num_training_samples = len(train_dataloader.dataset)
 
     acc_history = []
     loss_history = []
     for e in range(epochs):
         running_loss = 0
+        correct = 0
         for t, (x, y) in enumerate(train_dataloader):
             model.train()  # put model to training mode
             x = x.to(device=device)  # move to device, e.g. GPU
@@ -115,6 +96,8 @@ def train_part34(train_dataloader, model, loss_fn, optimizer, epochs, device):
 
             scores = model(x)
             loss = loss_fn(scores, y)
+
+            correct += (scores.argmax(1) == y).type(torch.float).sum().item()
 
             #add loss from batch to running_loss
             running_loss += loss.item()
@@ -126,32 +109,23 @@ def train_part34(train_dataloader, model, loss_fn, optimizer, epochs, device):
             # This is the backwards pass: compute the gradient of the loss with
             # respect to each  parameter of the model.
             loss.backward()
-            if(t%100 == 0):
-                print('iteration ', t, '- loss: ', loss.item())
+            if(t%30 == 0):
+                print(f"epoch {e+1}: iter {t} - loss = {loss.item()}")
 
             # Actually update the parameters of the model using the gradients
             # computed by the backwards pass.
-            
             optimizer.step()
-        # if(data_check):
-        #     torch.save(model.state_dict(), f"models/{model_path}")
-            
         
-        #went through all examples
-        #print(f"checking val accuracy for epoch {e}:")
-        #acc = check_accuracy_part34(val_dataloader, model, device)
-        #print(f"accuracy: {acc}")
-        #if(scheduler is not None):
-        #    scheduler.step(acc)
-        # Takes too long to check training accuracy
-        # print(f"checking train accuracy for epoch {e}:")
-        #acc_train = check_accuracy_part34(train_dataloader, model, device)
-        #print(f"accuracy: {acc_train}")
+        acc = correct/num_training_samples
+        print(f"Epoch {e+1} running loss = {running_loss/num_batches}, accuracy = {acc}")
 
-        #acc_history.append(acc)
-        loss_history.append(running_loss/len(train_dataloader))
+        if save_while_training:
+             torch.save(model.state_dict(), model_filepath)
+            
+        acc_history.append(acc)
+        loss_history.append(running_loss/num_batches)
 
-    return loss_history
+    return loss_history, acc_history
 
 
 '''
@@ -168,3 +142,50 @@ def plot_history(history_list, metric, filename):
 
     file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
     plt.savefig(file_path)
+
+'''
+Function to display an image given a dataloader. Assuming the dataloader is returns a batch of images, 
+batch index is the index of the element you want to visualize. The function only displays one image from
+the batch
+'''
+def display_image(dataloader, batch_index=0, verbose=False):
+    print('display an image')
+    train_features, train_labels = next(iter(dataloader))
+    if verbose:
+        print(f"Feature batch shape: {train_features.size()}")
+        print(f"Labels batch shape: {train_labels.size()}")
+    img = train_features[batch_index].squeeze().cpu()
+    # need to flip it b/c opencv reads in images as BGR, matplot reads in as RGB
+    img = torch.flip(img,dims=(0,))
+    label = train_labels[batch_index]
+    plot_img = torch.moveaxis(img,(0,1,2),(-1,0,1))
+    if verbose:
+        print('plot image shape', plot_img.shape)
+    plt.imshow(plot_img)
+    plt.show()
+    if verbose:
+        print(f"Label: {label}")
+
+'''
+Function to train model for a single batch. Not used
+'''
+def train_loop(dataloader, model, loss_fn, optimizer, device):
+    size = len(dataloader.dataset)
+    for batch, (X,y) in enumerate(dataloader):
+
+        model.train()  # put model to training mode
+        X = X.to(device=device)  # move to device, e.g. GPU
+        y = y.to(device=device)
+        
+        #compute prediction and loss
+        pred = model(X)
+        loss = loss_fn(pred,y)
+
+        #Backpropagation
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if batch % 100 == 0:
+            loss, current = loss.item(), batch*len(X)
+            print(f"loss: {loss:>7f} [{current:>5d}/{size:>5d}]")
